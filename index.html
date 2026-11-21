@@ -43,6 +43,13 @@ button.hud-pill{cursor:pointer;padding:6px 10px}
 .tile.empty{background:transparent;box-shadow:none;cursor:default;pointer-events:none}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
 .tile.shake{animation:shake .22s}
+/* ===== 稀有皮肤主题（通关随机掉落，只换配色不换素材）===== */
+body.theme-harvest .tile{background:linear-gradient(180deg,#fff3d6,#f3cf8e)}
+body.theme-harvest .tile.sel{background:linear-gradient(180deg,#ffd98a,#ffb02e)}
+body.theme-frost .tile{background:linear-gradient(180deg,#f4fbff,#d3e8f7)}
+body.theme-frost .tile.sel{background:linear-gradient(180deg,#bfe6ff,#7cc3ef)}
+body.theme-festival .tile{background:linear-gradient(180deg,#fff0f2,#f7c9d2)}
+body.theme-festival .tile.sel{background:linear-gradient(180deg,#ffc8d2,#ff8fa3)}
 #lines{position:absolute;pointer-events:none;z-index:4}
 #bottomBar{position:absolute;bottom:0;left:0;right:0;padding:10px 12px 16px;display:flex;justify-content:center;gap:10px;z-index:5;flex-wrap:wrap}
 #wheelWrap{position:relative;width:min(76vw,310px);height:min(76vw,310px);margin:6px 0 10px}
@@ -264,10 +271,12 @@ button.hud-pill{cursor:pointer;padding:6px 10px}
     <button class="btn" id="btnStart">开始游戏</button>
     <button class="btn orange" id="btnGoWheel">转盘抽奖</button>
     <button class="btn blue" id="btnGoPrizes">我的奖品</button>
-    <p class="home-tip">抽奖机会 <b id="homeChance">0</b> 次 · 金豆 <b id="homeBeans">0</b></p>
+    <p class="home-tip">第 <b id="homeLevel">1</b> 关 · 抽奖机会 <b id="homeChance">0</b> 次 · 金豆 <b id="homeBeans">0</b></p>
     <div class="home-links">
       <button class="home-chip" id="btnLogin">👤 微信登录</button>
       <button class="home-chip" id="btnSign">📅 每日签到<i class="dot" id="signDot"></i></button>
+      <button class="home-chip" id="btnDaily">🎁 每日任务</button>
+      <button class="home-chip" id="btnSkins">🎨 皮肤</button>
       <button class="home-chip" id="btnAdmin">⚙️ 管理后台</button>
       <button class="home-chip" id="btnExportHtml">💾 导出网页</button>
     </div>
@@ -276,6 +285,7 @@ button.hud-pill{cursor:pointer;padding:6px 10px}
 
   <section class="screen" id="game">
     <div id="hud">
+      <div class="hud-pill">第 <b id="hudLevel">1</b> 关</div>
       <div class="hud-pill">剩余 <b id="hudLeft">0</b></div>
       <div class="hud-pill">时间 <b id="hudTime">00:00</b></div>
       <div class="hud-pill">机会 <b id="hudChance">0</b></div>
@@ -287,8 +297,10 @@ button.hud-pill{cursor:pointer;padding:6px 10px}
       <canvas id="lines"></canvas>
     </div>
     <div id="bottomBar">
-      <button class="btn small blue" id="btnHint">提示 -1</button>
-      <button class="btn small orange" id="btnShuffle">重排 -1</button>
+      <button class="btn small blue" id="btnHint">提示</button>
+      <button class="btn small orange" id="btnShuffle">重排</button>
+      <button class="btn small blue" id="btnBomb">炸弹</button>
+      <button class="btn small orange" id="btnFreeze">冻结</button>
       <button class="btn small blue" id="btnShop2">🛒 商城</button>
       <button class="btn small orange" id="btnPropAd">📺 看广告领重排</button>
       <button class="btn small" id="btnBackHome">返回</button>
@@ -512,7 +524,12 @@ const CONFIG = {
   ]
 };
 
-const ICON_SET = ['🍐', '🍇', '🍯', '🥛', '🐔', '🧑‍🌾', '🎃', '🌾'];
+const ICON_SET = [
+  '🍐', '🍇', '🍯', '🥛', '🐔', '🧑‍🌾', '🎃', '🌾',
+  '🌽', '🍎', '🍒', '🌰', '🍄', '🥕', '🍅', '🧺',
+  '🪣', '🐑', '🦋', '🌻'
+];
+/* 前 8 种有 AI 素材图；第 9 种起自动降级为 emoji（syncTiles 内有回退） */
 const TILE_ICONS = ['pear', 'grape', 'honey', 'milk', 'hen', 'scarecrow', 'pumpkin', 'wheat'];
 const TILE_ICON_BASE = 'assets/icons/';
 /* 导出离线 HTML 时会把本表填充为 base64 资源；正常运行时为 null，走相对路径 */
@@ -520,6 +537,44 @@ const EXPORT_ASSETS = {};
 function tileIconSrc(key) {
   return EXPORT_ASSETS[TILE_ICON_BASE + key + '.png'] || (TILE_ICON_BASE + key + '.png');
 }
+
+/* ============================================================
+关卡梯度：4×4 → 12×12，元素 5 → 20 种，共 800 关
+时间按格子数推算，单局落在 1–3 分钟
+============================================================ */
+const LEVEL_TOTAL = 800;
+const LEVEL_STEPS = [
+  { until: 5, rows: 4, cols: 4, icons: 5 },
+  { until: 12, rows: 5, cols: 4, icons: 6 },
+  { until: 20, rows: 6, cols: 5, icons: 7 },
+  { until: 30, rows: 6, cols: 6, icons: 8 },
+  { until: 45, rows: 7, cols: 6, icons: 10 },
+  { until: 60, rows: 8, cols: 7, icons: 11 },
+  { until: 80, rows: 8, cols: 8, icons: 12 },
+  { until: 110, rows: 9, cols: 8, icons: 13 },
+  { until: 150, rows: 10, cols: 9, icons: 15 },
+  { until: 200, rows: 10, cols: 10, icons: 16 },
+  { until: 320, rows: 11, cols: 10, icons: 18 },
+  { until: LEVEL_TOTAL, rows: 12, cols: 12, icons: 20 }
+];
+
+function levelSpec(n) {
+  const lv = Math.max(1, Math.min(LEVEL_TOTAL, n | 0));
+  const step = LEVEL_STEPS.find((x) => lv <= x.until) || LEVEL_STEPS[LEVEL_STEPS.length - 1];
+  const cells = step.rows * step.cols;
+  const icons = Math.max(5, Math.min(step.icons, Math.floor(cells / 4)));
+  const secs = Math.max(60, Math.min(180, Math.round(cells * 1.1)));
+  return { level: lv, rows: step.rows, cols: step.cols, icons: icons, time: secs };
+}
+
+/* 通关随机掉落的稀有皮肤（只改棋盘主题色，不额外下载素材） */
+const SKINS = [
+  { id: 'village', name: '田园牧歌', cls: '' },
+  { id: 'harvest', name: '秋收金穗', cls: 'theme-harvest' },
+  { id: 'frost', name: '霜雪冬夜', cls: 'theme-frost' },
+  { id: 'festival', name: '灯火节庆', cls: 'theme-festival' }
+];
+const RARE_SKINS = ['harvest', 'frost', 'festival'];
 
 const PRIZE_ORDER = ['luck', 'bear', 'gold', 'sand', 'lotus'];
 const PRIZE_META = {
@@ -534,8 +589,8 @@ const SAVE_KEY = 'village-link-save-v1';
 const DEVICE_KEY = 'village-link-device-v1';
 const API_URL = 'https://backend.miaoda.online/projects/supabase380911212357005312/functions/v1/game-sync';
 const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoyMTEwMjQzNTEwLCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwic3ViIjoiYW5vbiJ9.oI0UQRoxO8z1Zn3EAp09bWG2ZTbZw08u1bafHzuMSd0';
-const CW = CONFIG.COLS + 2;   // 含外圈空格，用于绕行连线
-const CH = CONFIG.ROWS + 2;
+let CW = CONFIG.COLS + 2;   // 含外圈空格，用于绕行连线（随关卡尺寸变化）
+let CH = CONFIG.ROWS + 2;
 const PAD = 28;               // 连线画布向外扩展的像素
 
 const $ = (s) => document.querySelector(s);
@@ -556,7 +611,15 @@ const state = {
   adReadyAt: 0,
   sfx: true,
   musicOff: false,
-  props: { shuffle: 0 },
+  props: { shuffle: 0, hint: 0, bomb: 0, freeze: 0 },
+  level: 1,
+  best: 1,
+  newbie: { steps: 0, autos: 0 },
+  autoClear: false,
+  combo: 0,
+  lastClearAt: 0,
+  skins: ['village'],
+  skin: 'village',
   sign: { last: '', streak: 0, total: 0, log: [] },
   stats: { spins: 0, beans: 0 },
   cfg: null,
@@ -604,7 +667,20 @@ function loadSave() {
     state.sfx = d.sfx !== false;
     state.beans = Math.max(0, d.beans | 0);
     state.musicOff = d.musicOff === true;
-    state.props = { shuffle: Math.max(0, (d.props && d.props.shuffle) | 0) };
+    const pr = d.props && typeof d.props === 'object' ? d.props : {};
+    state.props = {
+      shuffle: Math.max(0, pr.shuffle | 0),
+      hint: Math.max(0, pr.hint | 0),
+      bomb: Math.max(0, pr.bomb | 0),
+      freeze: Math.max(0, pr.freeze | 0)
+    };
+    state.level = Math.max(1, Math.min(LEVEL_TOTAL, d.level | 0 || 1));
+    state.best = Math.max(1, Math.min(LEVEL_TOTAL, d.best | 0 || 1));
+    state.skins = Array.isArray(d.skins) && d.skins.length
+      ? d.skins.filter((x) => SKINS.some((k) => k.id === x))
+      : ['village'];
+    if (!state.skins.length) state.skins = ['village'];
+    state.skin = state.skins.indexOf(d.skin) >= 0 ? d.skin : 'village';
     const sg = d.sign && typeof d.sign === 'object' ? d.sign : {};
     state.sign = {
       last: typeof sg.last === 'string' ? sg.last : '',
@@ -612,6 +688,7 @@ function loadSave() {
       total: Math.max(0, sg.total | 0),
       log: Array.isArray(sg.log) ? sg.log.slice(-60) : []
     };
+    state.daily = d.daily && typeof d.daily === 'object' ? d.daily : null;
     const st = d.stats && typeof d.stats === 'object' ? d.stats : {};
     state.stats = { spins: Math.max(0, st.spins | 0), beans: Math.max(0, st.beans | 0) };
     state.cfg = d.cfg && typeof d.cfg === 'object' ? d.cfg : null;
@@ -633,6 +710,11 @@ function writeCache() {
       beans: state.beans,
       musicOff: state.musicOff,
       props: state.props,
+      level: state.level,
+      best: state.best,
+      skins: state.skins,
+      skin: state.skin,
+      daily: state.daily,
       sign: state.sign,
       stats: state.stats,
       cfg: state.cfg,
@@ -1042,6 +1124,22 @@ function updateHUD() {
   if (bs) bs.textContent = state.props.shuffle > 0 ? '重排 ×' + state.props.shuffle : '重排 -1';
   const sfx = $('#btnSfx');
   if (sfx) sfx.textContent = state.sfx ? '🔊' : '🔇';
+  const hl = $('#hudLevel');
+  if (hl) hl.textContent = state.level;
+  const hb2 = $('#hudBomb');
+  if (hb2) hb2.textContent = state.props.bomb;
+  const hf = $('#hudFreeze');
+  if (hf) hf.textContent = state.props.freeze;
+  const hh = $('#hudHintCount');
+  if (hh) hh.textContent = state.props.hint;
+  const hm = $('#homeLevel');
+  if (hm) hm.textContent = state.best;
+  const bs2 = $('#btnHint');
+  if (bs2) bs2.textContent = state.props.hint > 0 ? '提示 ×' + state.props.hint : '提示';
+  const bb = $('#btnBomb');
+  if (bb) bb.textContent = state.props.bomb > 0 ? '炸弹 ×' + state.props.bomb : '炸弹';
+  const bf = $('#btnFreeze');
+  if (bf) bf.textContent = state.props.freeze > 0 ? '冻结 ×' + state.props.freeze : '冻结';
   updateMusicBtn();
 }
 
@@ -1787,15 +1885,21 @@ function syncTiles() {
           img.alt = '';
           el.appendChild(img);
         }
-        const key = TILE_ICONS[t] || TILE_ICONS[0];
-        const src = tileIconSrc(key);
-        if (img.getAttribute('src') !== src) {
-          img.style.display = '';
-          img.onerror = () => {
-            img.style.display = 'none';
-            el.textContent = ICON_SET[t];
-          };
-          img.src = src;
+        const key = TILE_ICONS[t];
+        if (!key) {
+          img.style.display = 'none';
+          el.textContent = ICON_SET[t] || '❓';
+        } else {
+          const src = tileIconSrc(key);
+          if (img.getAttribute('src') !== src) {
+            img.style.display = '';
+            el.textContent = '';
+            img.onerror = () => {
+              img.style.display = 'none';
+              el.textContent = ICON_SET[t] || '❓';
+            };
+            img.src = src;
+          }
         }
       }
     }
@@ -1805,10 +1909,15 @@ function syncTiles() {
 function dealTiles() {
   state.grid = new Array(CW * CH).fill(null);
   const total = CONFIG.ROWS * CONFIG.COLS;
+  /* 必须成对发牌：总格数不是种类数整数倍时，旧的取模发牌会留下奇数个同类，导致清不完 */
+  const kinds = Math.max(1, CONFIG.ICON_COUNT);
   const types = [];
-  for (let i = 0; i < total; i++) types.push(i % CONFIG.ICON_COUNT);
+  for (let i = 0; i < Math.floor(total / 2); i++) {
+    const t = i % kinds;
+    types.push(t, t);
+  }
 
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     shuffleArray(types);
     let k = 0;
     for (let r = 1; r <= CONFIG.ROWS; r++) {
@@ -1821,12 +1930,26 @@ function dealTiles() {
   syncTiles();
 }
 
-function startGame() {
+function startLevel(level) {
+  const spec = levelSpec(level);
+  state.level = spec.level;
+  CONFIG.ROWS = spec.rows;
+  CONFIG.COLS = spec.cols;
+  CONFIG.ICON_COUNT = spec.icons;
+  CONFIG.TIME_LIMIT = spec.time;
+  CW = spec.cols + 2;
+  CH = spec.rows + 2;
+  state.newbie = { steps: 0, autos: 0 };
+  state.autoClear = false;
+  state.combo = 0;
+  state.lastClearAt = 0;
+
   show('game');
+  applySkin();
   buildBoard();
   dealTiles();
   state.remaining = CONFIG.ROWS * CONFIG.COLS;
-  state.timeLeft = CONFIG.TIME_LIMIT;
+  state.timeLeft = spec.time;
   state.selected = null;
   state.busy = false;
   state.playing = true;
@@ -1835,11 +1958,65 @@ function startGame() {
   clearInterval(state.timerId);
   state.timerId = setInterval(tick, 1000);
   setTimeout(setupLines, 40);
-  toast('点击两个相同图案即可连接消除');
+  toast('第 ' + spec.level + ' 关 · ' + spec.rows + '×' + spec.cols + ' · ' + spec.icons + ' 种图案');
+  if (spec.level <= 3) setTimeout(() => toast('🌱 新手关：前 10 步会自动帮你消除 3 次'), 1500);
+}
+
+function startGame(level) {
+  startLevel(level || state.level);
+}
+
+function applySkin() {
+  const skin = SKINS.find((k) => k.id === state.skin) || SKINS[0];
+  SKINS.forEach((k) => { if (k.cls) document.body.classList.remove(k.cls); });
+  if (skin.cls) document.body.classList.add(skin.cls);
+}
+
+/* 通关随机掉落稀有皮肤（15%，只掉未解锁的） */
+function rollSkinDrop() {
+  if (Math.random() > 0.15) return null;
+  const pool = RARE_SKINS.filter((id) => state.skins.indexOf(id) < 0);
+  if (!pool.length) return null;
+  const id = pool[Math.floor(Math.random() * pool.length)];
+  state.skins.push(id);
+  return SKINS.find((k) => k.id === id) || null;
+}
+
+/* 新手保底：前 3 关每 3 步自动消除一对，最多 3 次 */
+function scheduleNewbieBoost() {
+  if (state.level > 3 || !state.playing) return;
+  if (state.newbie.autos >= 3) return;
+  setTimeout(() => {
+    if (!state.playing || state.busy) return;
+    const pair = findAnyPair();
+    if (!pair || pair.length < 2) return;
+    state.newbie.autos += 1;
+    state.autoClear = true;
+    removePair(pair[0], pair[1], findPath(pair[0], pair[1]));
+    toast('🌱 新手保底：自动消除一对（' + state.newbie.autos + '/3）');
+  }, 460);
+}
+
+/* 触感反馈：浏览器/WebView 支持则震动，不支持静默降级 */
+function buzz(pattern) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(pattern || 16);
+  } catch (e) { /* 忽略 */ }
+}
+
+/* 连击音效：连击越高音调越高 */
+function sfxCombo(n) {
+  const base = 620 + Math.min(n, 6) * 70;
+  tone(base, 0.1, 'triangle', 0.09);
+  setTimeout(() => tone(base * 1.5, 0.09, 'triangle', 0.07), 70);
 }
 
 function tick() {
   if (!state.playing) return;
+  if (state.frozenUntil && Date.now() < state.frozenUntil) {
+    updateHUD();
+    return;
+  }
   state.timeLeft -= 1;
   if (state.timeLeft <= 0) {
     state.timeLeft = 0;
@@ -1882,7 +2059,17 @@ function removePair(a, b, path) {
   const pb = cellCenter(b.r, b.c);
   spawnBurst(pa.x, pa.y, ['#ffe28a', '#ffc93c', '#fff6d8']);
   spawnBurst(pb.x, pb.y, ['#b8eca0', '#ffd75e', '#ffffff']);
-  sfxMatch();
+
+  const nowMs = Date.now();
+  state.combo = nowMs - state.lastClearAt < 2600 ? state.combo + 1 : 1;
+  state.lastClearAt = nowMs;
+  if (state.combo > 1) {
+    sfxCombo(state.combo);
+    toast('连击 ×' + state.combo + ' 🔥');
+  } else {
+    sfxMatch();
+  }
+  buzz(15);
 
   const ia = idx(a.r, a.c);
   const ib = idx(b.r, b.c);
@@ -1904,11 +2091,17 @@ function removePair(a, b, path) {
   setTimeout(() => {
     state.busy = false;
     state.remaining = Math.max(0, state.remaining - 2);
+    if (!state.autoClear && state.level <= 3) {
+      state.newbie.steps += 1;
+      if (state.newbie.steps % 3 === 0) scheduleNewbieBoost();
+    }
+    state.autoClear = false;
     updateHUD();
     if (state.remaining === 0) {
       win();
       return;
     }
+    if (state.level && !state.autoClear) bumpTask('clear', 1);
     if (!findAnyPair()) {
       toast('没有可消除的组合，自动重排');
       doShuffle(true);
@@ -2031,28 +2224,241 @@ function useShuffle() {
 }
 
 /* ============================================================
+道具：炸弹 / 冻结 / 每日免费
+============================================================ */
+const PROP_FREE_KEY = 'village-propfree-v1';
+
+function propFreeLeft(kind) {
+  try {
+    const d = JSON.parse(localStorage.getItem(PROP_FREE_KEY) || '{}');
+    return d.date === dateStr() && d[kind] ? 0 : 1;
+  } catch (e) { return 1; }
+}
+
+function usePropFree(kind) {
+  try {
+    let d = {};
+    try { d = JSON.parse(localStorage.getItem(PROP_FREE_KEY) || '{}'); } catch (e) { d = {}; }
+    if (d.date !== dateStr()) d = { date: dateStr() };
+    d[kind] = 1;
+    localStorage.setItem(PROP_FREE_KEY, JSON.stringify(d));
+  } catch (e) { /* 忽略 */ }
+}
+
+function useBomb() {
+  if (!state.playing || state.busy) return;
+  if (state.props.bomb > 0) {
+    state.props.bomb -= 1;
+    save();
+    updateHUD();
+    blastPair();
+    return;
+  }
+  if (propFreeLeft('bomb')) {
+    usePropFree('bomb');
+    updateHUD();
+    blastPair();
+    toast('今日免费炸弹（每日 1 次）');
+    return;
+  }
+  askPropAd('bomb');
+}
+
+function blastPair() {
+  const pair = findAnyPair();
+  if (!pair || pair.length < 2) {
+    toast('没有可炸的组合，已自动重排');
+    doShuffle(true);
+    return;
+  }
+  state.autoClear = true;
+  removePair(pair[0], pair[1], findPath(pair[0], pair[1]));
+  buzz(30);
+  toast('💥 炸弹消除一对');
+}
+
+function useFreeze() {
+  if (!state.playing) return;
+  const run = () => {
+    state.frozenUntil = Date.now() + 15000;
+    save();
+    toast('❄️ 冻结 15 秒，倒计时暂停');
+    tone(520, 0.3, 'sine', 0.05);
+  };
+  if (state.props.freeze > 0) {
+    state.props.freeze -= 1;
+    save();
+    updateHUD();
+    run();
+    return;
+  }
+  if (propFreeLeft('freeze')) {
+    usePropFree('freeze');
+    updateHUD();
+    run();
+    return;
+  }
+  askPropAd('freeze');
+}
+
+/* 道具不足且免费额度用完：看激励视频领 1 个 */
+function askPropAd(kind) {
+  const names = { hint: '提示', shuffle: '重排', bomb: '炸弹', freeze: '冻结' };
+  const name = names[kind] || '道具';
+  showModal({
+    icon: '📺',
+    title: '看广告领「' + name + '」',
+    text: '完整观看一段激励视频即可获得 <b>1 个' + name + '道具</b>。<br>中途退出或加载失败都不会发放，也不扣任何东西。',
+    buttons: [
+      { label: '开始观看', cls: 'orange', onClick: () => { AD_PROP_KIND = kind; startAd('prop', { kind: kind }); } },
+      { label: '以后再说' }
+    ]
+  });
+}
+
+let AD_PROP_KIND = '';
+
+/* ============================================================
+每日任务 + 随机宝箱
+============================================================ */
+const DAILY_TASKS = [
+  { key: 'play', name: '完成 1 局游戏', goal: 1, icon: '🎯' },
+  { key: 'clear', name: '累计消除 20 对', goal: 20, icon: '🧩' },
+  { key: 'ad', name: '观看 1 次广告', goal: 1, icon: '📺' }
+];
+
+function todayTasks() {
+  if (!state.daily || state.daily.date !== dateStr()) {
+    state.daily = { date: dateStr(), play: 0, clear: 0, ad: 0, claimed: false };
+  }
+  return state.daily;
+}
+
+function bumpTask(key, n) {
+  const d = todayTasks();
+  if (d.claimed) return;
+  d[key] = Math.min(999, (d[key] | 0) + (n || 1));
+  save();
+  updateHUD();
+}
+
+function taskState(key) {
+  const d = todayTasks();
+  const t = DAILY_TASKS.find((x) => x.key === key);
+  const cur = Math.min(t.goal, d[key] | 0);
+  return { done: cur >= t.goal, cur: cur, goal: t.goal };
+}
+
+function dailyAllDone() {
+  return DAILY_TASKS.every((t) => taskState(t.key).done);
+}
+
+function openDailyModal() {
+  const d = todayTasks();
+  const rows = DAILY_TASKS.map((t) => {
+    const st = taskState(t.key);
+    return '<div class="shop-log"><div class="shop-log-main"><div class="shop-log-name">' + t.icon + ' ' + t.name +
+      '</div><div class="shop-log-meta">进度 ' + st.cur + '/' + st.goal + '</div></div><span class="tag">' +
+      (st.done ? '已完成' : '进行中') + '</span></div>';
+  }).join('');
+  const canClaim = dailyAllDone() && !d.claimed;
+  showModal({
+    icon: '🎁',
+    title: '每日任务',
+    text: rows + '<p class="shop-tip">3 个任务全部完成后可开启「每日宝箱」：随机金豆 + 随机道具，有概率额外获得抽奖机会。</p>',
+    buttons: canClaim
+      ? [{ label: '开启宝箱', cls: 'orange', onClick: claimDailyChest }, { label: '稍后' }]
+      : [{ label: d.claimed ? '今日已领取' : '继续努力' }]
+  });
+}
+
+function claimDailyChest() {
+  const d = todayTasks();
+  if (d.claimed || !dailyAllDone()) return;
+  const beans = 20 + Math.floor(Math.random() * 16);
+  const pool = ['hint', 'shuffle', 'bomb', 'freeze'];
+  const kind = pool[Math.floor(Math.random() * pool.length)];
+  const chance = Math.random() < 0.35 ? 1 : 0;
+  d.claimed = true;
+  state.beans += beans;
+  state.stats.beans += beans;
+  state.props[kind] += 1;
+  state.chances += chance;
+  save();
+  updateHUD();
+  updateWheelUI();
+  sfxCoin();
+  startConfetti();
+  showModal({
+    icon: '📦',
+    title: '宝箱开启！',
+    text: '获得 <b>' + beans + '</b> 金豆 · <b>' + kind + ' 道具 ×1</b>' + (chance ? ' · <b>抽奖机会 ×1</b>' : ''),
+    buttons: [{ label: '太棒了' }]
+  });
+}
+
+/* ============================================================
+皮肤库
+============================================================ */
+function openSkinModal() {
+  const rows = SKINS.map((k) => {
+    const owned = state.skins.indexOf(k.id) >= 0;
+    return '<div class="shop-log"><div class="shop-log-main"><div class="shop-log-name">🎨 ' + k.name +
+      '</div><div class="shop-log-meta">' + (k.cls ? '稀有 · 通关 15% 概率掉落' : '默认皮肤') + '</div></div><span class="tag">' +
+      (state.skin === k.id ? '使用中' : owned ? '已拥有' : '未解锁') + '</span></div>';
+  }).join('');
+  showModal({
+    icon: '🎨',
+    title: '皮肤库',
+    text: rows + '<p class="shop-tip">稀有皮肤会在通关时随机掉落，只换配色不改玩法。</p>',
+    buttons: SKINS.filter((k) => state.skins.indexOf(k.id) >= 0 && state.skin !== k.id)
+      .slice(0, 3)
+      .map((k) => ({ label: '使用' + k.name, onClick: () => { state.skin = k.id; applySkin(); save(); updateHUD(); openSkinModal(); } }))
+      .concat([{ label: '关闭' }])
+  });
+}
+
+/* ============================================================
 胜负
 ============================================================ */
 function win() {
   state.playing = false;
   clearInterval(state.timerId);
   clearSelection();
-  const ratio = state.timeLeft / CONFIG.TIME_LIMIT;
+  const total = CONFIG.TIME_LIMIT;
+  const ratio = state.timeLeft / total;
   const stars = ratio > 0.6 ? 3 : ratio > 0.3 ? 2 : 1;
   state.chances += cfgWin();
+  bumpTask('play', 1);
+  const nextLv = Math.min(LEVEL_TOTAL, state.level + 1);
+  state.best = Math.max(state.best, nextLv);
+  const skin = rollSkinDrop();
   save();
   updateHUD();
   sfxWin();
+  buzz([25, 40, 25]);
+
+  const cleared = state.level >= LEVEL_TOTAL;
+  const skinLine = skin ? '<br>🎨 掉落稀有皮肤：<b>' + skin.name + '</b>（已存入皮肤库）' : '';
+  const text = '用时 ' + fmtTime(total - state.timeLeft) + ' · 剩余 ' + fmtTime(state.timeLeft) +
+    ' · 星级 ' + '★'.repeat(stars) + '<br>获得 <b>' + cfgWin() + '</b> 次抽奖机会，当前共 <b>' +
+    state.chances + '</b> 次 · 累计到第 <b>' + state.best + '</b> 关' + skinLine;
+
   showModal({
-    icon: '🎉',
-    title: '通关成功',
-    text: '用时 ' + fmtTime(CONFIG.TIME_LIMIT - state.timeLeft) + ' · 剩余 ' + fmtTime(state.timeLeft) +
-      '<br>获得 <b>' + cfgWin() + '</b> 次抽奖机会，当前共 <b>' + state.chances + '</b> 次',
-    buttons: [
-      { label: '去转盘抽奖', cls: 'orange', onClick: () => { show('wheelScreen'); updateWheelUI(); } },
-      { label: '再来一局', cls: 'blue', onClick: () => startGame() },
-      { label: '返回首页', onClick: () => { show('home'); updateHUD(); maybeShowInterstitial(); } }
-    ]
+    icon: cleared ? '🏆' : '🎉',
+    title: cleared ? '全部 ' + LEVEL_TOTAL + ' 关通关！' : '第 ' + state.level + ' 关通关',
+    text: text,
+    buttons: cleared
+      ? [
+          { label: '去转盘抽奖', cls: 'orange', onClick: () => { show('wheelScreen'); updateWheelUI(); } },
+          { label: '重玩本关', cls: 'blue', onClick: () => startLevel(state.level) },
+          { label: '返回首页', onClick: () => { show('home'); updateHUD(); maybeShowInterstitial(); } }
+        ]
+      : [
+          { label: '下一关', cls: 'orange', onClick: () => startLevel(nextLv) },
+          { label: '去转盘抽奖', cls: 'blue', onClick: () => { show('wheelScreen'); updateWheelUI(); } },
+          { label: '返回首页', onClick: () => { show('home'); updateHUD(); maybeShowInterstitial(); } }
+        ]
   });
 }
 
@@ -2061,12 +2467,14 @@ function lose() {
   clearInterval(state.timerId);
   clearSelection();
   sfxBad();
+  bumpTask('play', 1);
   showModal({
     icon: '⏰',
     title: '时间到',
-    text: '还剩 <b>' + state.remaining + '</b> 个方块没有消除。<br>下次试试用提示或重排打开局面。',
+    text: '第 <b>' + state.level + '</b> 关还剩 <b>' + state.remaining + '</b> 个方块没有消除。<br>' +
+      '下次试试用提示、炸弹或冻结打开局面。',
     buttons: [
-      { label: '再来一局', cls: 'blue', onClick: () => startGame() },
+      { label: '重试本关', cls: 'blue', onClick: () => startLevel(state.level) },
       { label: '返回首页', onClick: () => { show('home'); updateHUD(); maybeShowInterstitial(); } }
     ]
   });
@@ -2910,7 +3318,9 @@ function requestPropAd() {
 }
 
 function rewardPropAd() {
-  state.props.shuffle += 1;
+  const kind = AD_PROP_KIND || 'shuffle';
+  AD_PROP_KIND = '';
+  state.props[kind] = (state.props[kind] | 0) + 1;
   state.adCount += 1;
   state.adReadyAt = Date.now() + CONFIG.AD_COOLDOWN * 1000;
   save();
@@ -3899,6 +4309,7 @@ function onAdDone(result) {
   }
   AD_CTX = null;
   if (result === 'reward') {
+    bumpTask('ad', 1);
     adTrack('rewarded', 'complete', { purpose: ctx ? ctx.purpose : 'unknown' });
     $('#adOverlay').classList.remove('show');
     clearInterval(state.adTimer);
@@ -4099,6 +4510,10 @@ $('#btnBackHome').addEventListener('click', () => { stopGame(); show('home'); up
 $('#btnBackHome2').addEventListener('click', () => { show('home'); updateHUD(); });
 $('#btnBackHome3').addEventListener('click', () => { show('home'); updateHUD(); });
 $('#btnHint').addEventListener('click', useHint);
+$('#btnBomb').addEventListener('click', useBomb);
+$('#btnFreeze').addEventListener('click', useFreeze);
+$('#btnDaily').addEventListener('click', openDailyModal);
+$('#btnSkins').addEventListener('click', openSkinModal);
 $('#btnShuffle').addEventListener('click', useShuffle);
 $('#btnSpin').addEventListener('click', spin);
 $('#wheelCenter').addEventListener('click', spin);
