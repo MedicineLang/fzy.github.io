@@ -1,0 +1,15 @@
+{
+  "pack_id": "village-link-icons",
+  "theme": "卡通手绘风乡村农场，温暖明亮的田园色调，简洁圆润造型，适合休闲连连看游戏图标",
+  "art_style": "hd",
+  "assets": [
+    {"key": "wheat", "role": "icon", "prompt": "卡通手绘风的一小捆金黄麦穗，正面视角，谷粒饱满，暖黄色调，造型简洁圆润"},
+    {"key": "corn", "role": "icon", "prompt": "卡通手绘风的一根带绿叶的甜玉米，正面视角，金黄玉米粒，造型简洁圆润"},
+    {"key": "pumpkin", "role": "icon", "prompt": "卡通手绘风的大南瓜，橙红色，带一小段绿藤，正面视角，造型简洁圆润"},
+    {"key": "apple", "role": "icon", "prompt": "卡通手绘风的红苹果，带一片绿叶，正面视角，饱满圆润"},
+    {"key": "sunflower", "role": "icon", "prompt": "卡通手绘风的向日葵，花瓣金黄、花心深棕，正面视角，造型简洁圆润"},
+    {"key": "carrot", "role": "icon", "prompt": "卡通手绘风的橙色胡萝卜，带绿色叶子，竖向摆放，造型简洁圆润"},
+    {"key": "barn", "role": "icon", "prompt": "卡通手绘风的乡村谷仓，红色木墙配灰白色屋顶，正面视角，屋顶带小窗，造型简洁"},
+    {"key": "windmill", "role": "icon", "prompt": "卡通手绘风的荷兰式小风车，白色塔身配棕色四叶风车叶片和红顶，正面视角，造型简洁"}
+  ]
+}

@@ -1,0 +1,357 @@
+                                            `html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-
+scalable=no">
+<title>村庄连连看 · 转盘抽奖</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;font-family:-apple-
+system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-
+serif;overflow:hidden;background:#1a2a1a}
+#app{position:relative;width:100%;height:100%;overflow:hidden}
+#bg{position:absolute;inset:0;background-size:cover;background-position:center;background-
+repeat:no-repeat}
+#bg::after{content:"";position:absolute;inset:0;background:linear-
+gradient(180deg,rgba(0,0,0,.30) 0%,rgba(0,0,0,.04) 28%,rgba(0,0,0,.04) 68%,rgba(0,0,0,.42) 100%)}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-
+content:center;padding:12px;z-index:2}
+.screen.active{display:flex}
+h1{font-size:26px;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.75);margin:0 0 6px;letter-
+spacing:2px}
+.sub{color:#eef7e6;font-size:13px;text-shadow:0 1px 4px rgba(0,0,0,.85);margin-bottom:18px;text-
+align:center;line-height:1.7}
+.btn{border:none;border-radius:26px;padding:13px 34px;font-size:16px;font-
+weight:600;color:#fff;background:linear-gradient(180deg,#5fbf4a,#3d8f2e);box-shadow:0 4px 0
+#2a6a1f,0 6px 16px rgba(0,0,0,.4);cursor:pointer;margin:7px;transition:transform .08s,box-
+shadow .08s;font-family:inherit}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #2a6a1f,0 3px 10px rgba(0,0,0,.4)}
+.btn.orange{background:linear-gradient(180deg,#ffb347,#e8862a);box-shadow:0 4px 0
+#b3641a,0 6px 16px rgba(0,0,0,.4)}
+.btn.orange:active{box-shadow:0 1px 0 #b3641a,0 3px 10px rgba(0,0,0,.4)}
+.btn.blue{background:linear-gradient(180deg,#5aa9e6,#2f7fc1);box-shadow:0 4px 0 #1f5c8f,0
+6px 16px rgba(0,0,0,.4)}
+.btn.blue:active{box-shadow:0 1px 0 #1f5c8f,0 3px 10px rgba(0,0,0,.4)}
+.btn:disabled{filter:grayscale(.75);opacity:.6;cursor:not-allowed;transform:none}
+.btn.small{padding:9px 20px;font-size:14px;border-radius:20px}
+
+
+                                            第1页/共9页
+#hud{position:absolute;top:0;left:0;right:0;padding:8px 10px;display:flex;justify-content:space-
+between;align-items:center;z-index:5;pointer-events:none;gap:6px}
+.hud-pill{background:rgba(0,0,0,.58);color:#fff;border-radius:16px;padding:6px 12px;font-
+size:13px;font-weight:600;backdrop-filter:blur(4px);pointer-events:auto;display:flex;align-
+items:center;gap:6px;white-space:nowrap}
+.hud-pill b{color:#ffd75e}
+#boardWrap{position:relative;width:100%;max-
+width:560px;margin:auto;padding:5px;background:rgba(255,255,255,.18);border-
+radius:16px;box-shadow:0 8px 30px rgba(0,0,0,.5);backdrop-filter:blur(3px)}
+#board{display:grid;gap:3px;width:100%;aspect-ratio:1/1}
+.tile{position:relative;border-radius:8px;display:flex;align-items:center;justify-
+content:center;font-size:clamp(15px,5vw,30px);background:linear-
+gradient(180deg,#fffdf5,#f0e6cf);box-shadow:inset 0 -2px 0 rgba(0,0,0,.12),0 1px 3px
+rgba(0,0,0,.25);cursor:pointer;user-select:none;transition:transform .1s,box-
+shadow .1s,opacity .2s;overflow:hidden}
+.tile:active{transform:scale(.94)}
+.tile.sel{background:linear-gradient(180deg,#ffe98a,#ffcf3d);box-shadow:0 0 0 3px #ff9d00,0 0
+14px #ffb300;transform:scale(1.04)}
+.tile.hint{animation:hintPulse .7s ease-in-out 2}
+@keyframes hintPulse{0%,100%{box-shadow:inset 0 -2px 0 rgba(0,0,0,.12)}50%{box-shadow:0 0
+0 3px #4fc3f7,0 0 14px #4fc3f7}}
+.tile.gone{opacity:0;transform:scale(.4);pointer-events:none}
+.tile.empty{background:transparent;box-shadow:none;cursor:default;pointer-events:none}
+#lines{position:absolute;inset:0;pointer-events:none;z-index:4}
+#bottomBar{position:absolute;bottom:0;left:0;right:0;padding:10px 12px 16px;display:flex;justify-
+content:center;gap:10px;z-index:5;flex-wrap:wrap}
+#wheelWrap{position:relative;width:min(76vw,310px);height:min(76vw,310px);margin:4px 0
+10px}
+#wheel{width:100%;height:100%;border-radius:50%;box-shadow:0 0 0 8px #fff8e1,0 0 0 12px
+#c9a227,0 10px 30px rgba(0,0,0,.55);transition:transform 4.2s cubic-bezier(.17,.67,.16,1)}
+#pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;borde
+r-left:15px solid transparent;border-right:15px solid transparent;border-top:26px solid
+#e53935;filter:drop-shadow(0 3px 4px rgba(0,0,0,.5));z-index:3}
+#wheelCenter{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;he
+ight:56px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#ffd54f
+60%,#e8a317);box-shadow:0 3px 10px rgba(0,0,0,.5);display:flex;align-items:center;justify-
+content:center;font-size:13px;font-weight:800;color:#8a5a00;z-
+index:2;cursor:pointer;border:2px solid #fff}
+#modal{position:absolute;inset:0;background:rgba(0,0,0,.62);display:none;align-
+items:center;justify-content:center;z-index:20;padding:20px}
+#modal.show{display:flex}
+
+
+                                            第2页/共9页
+.modal-box{background:linear-gradient(180deg,#fffdf6,#f6ecd6);border-
+radius:20px;padding:24px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0
+20px 50px rgba(0,0,0,.6);border:3px solid #ffd75e;animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+.modal-box h2{margin:0 0 10px;font-size:20px;color:#5a3d00}
+.modal-box p{margin:0 0 16px;font-size:14px;color:#6b5a3a;line-height:1.7}
+.modal-icon{font-size:52px;margin-bottom:6px}
+#adOverlay{position:absolute;inset:0;background:#000;display:none;flex-direction:column;align-
+items:center;justify-content:center;z-index:30;color:#fff;padding:20px}
+#adOverlay.show{display:flex}
+#adCountdown{font-size:44px;font-weight:800;color:#ffd75e;margin:10px 0}
+.ad-bar{width:min(80%,300px);height:8px;background:#333;border-
+radius:4px;overflow:hidden;margin-top:14px}
+.ad-bar i{display:block;height:100%;width:0;background:linear-
+gradient(90deg,#5fbf4a,#ffd75e);transition:width .1s linear}
+.chance-row{display:flex;gap:8px;align-items:center;justify-content:center;margin:10px 0;flex-
+wrap:wrap}
+.chance-badge{background:rgba(0,0,0,.58);color:#fff;border-radius:14px;padding:6px 14px;font-
+size:13px;font-weight:600}
+.chance-badge b{color:#ffd75e;font-size:16px}
+.progress-dots{display:flex;gap:8px;justify-content:center;margin:8px 0 4px}
+.dot{width:16px;height:16px;border-radius:50%;background:rgba(255,255,255,.28);border:2px
+solid rgba(255,255,255,.6);transition:all .3s}
+.dot.on{background:#ffd75e;border-color:#fff;box-shadow:0 0 10px #ffd75e}
+.prize-list{width:min(92%,360px);max-height:46vh;overflow-y:auto;margin:8px 0}
+.prize-item{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.94);border-
+radius:12px;padding:10px 12px;margin-bottom:8px;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.prize-item .ico{font-size:24px}
+.prize-item .txt{flex:1;text-align:left;font-size:13px;color:#4a3a1a;line-height:1.5}
+.prize-item .txt b{display:block;font-size:14px;color:#2e5c1a}
+.prize-item .tag{font-size:11px;padding:3px 8px;border-
+radius:10px;background:#e8f5e0;color:#3d8f2e;font-weight:700;white-space:nowrap}
+.prize-item .tag.lock{background:#f0e6cf;color:#a08a5a}
+#toast{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)
+scale(.9);background:rgba(0,0,0,.84);color:#fff;padding:12px 22px;border-radius:14px;font-
+size:14px;z-index:40;opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;text-
+align:center;max-width:80%;line-height:1.6}
+#toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.result-box{background:rgba(255,255,255,.96);border-radius:20px;padding:26px 24px;text-
+
+
+                                             第3页/共9页
+align:center;max-width:320px;width:100%;box-shadow:0 16px 40px rgba(0,0,0,.5)}
+.result-box h2{margin:0 0 8px;color:#3d8f2e;font-size:22px}
+.result-box .stars{font-size:34px;margin:6px 0 10px;letter-spacing:4px}
+.result-box p{margin:0 0 16px;color:#6b5a3a;font-size:14px;line-height:1.7}
+@media(max-height:640px){h1{font-size:22px}.sub{margin-bottom:10px}}
+</style>
+</head>
+<body>
+
+<h1>村庄连连看</h1>
+消除全部方块即可通关
+通关得抽奖机会 · 看广告也能抽
+
+<button class="btn" id="btnStart">开始游戏</button>
+<button class="btn orange" id="btnGoWheel">转盘抽奖</button>
+<button class="btn blue" id="btnGoPrizes">我的奖品</button>
+
+剩余 0
+
+时间 00:00
+
+机会 0
+
+<canvas id="lines"></canvas>
+
+<button class="btn small blue" id="btnHint">提示</button>
+<button class="btn small orange" id="btnShuffle">重排</button>
+<button class="btn small" id="btnBackHome">返回</button>
+
+<h1 style="font-size:22px">转盘抽奖</h1>
+
+抽奖机会 0
+
+<canvas id="wheel" width="640" height="640"></canvas>
+抽奖
+
+<button class="btn small orange" id="btnWatchAd">看广告 +1 次</button>
+<button class="btn small" id="btnBackHome2">返回</button>
+
+看一次广告得一次抽奖机会
+累计看 3 次广告可抽毛绒娃娃
+
+<h1 style="font-size:22px">我的奖品</h1>
+累计看广告进度（满 3 次解锁毛绒娃娃）
+
+
+                                           第4页/共9页
+<button class="btn small" id="btnBackHome3">返回</button>
+
+广告播放中
+
+5
+
+看完即可获得 1 次抽奖机会
+
+<script>
+/* ============================================================
+可调参数
+============================================================ */
+const CONFIG = {
+ROWS: 8,
+COLS: 8,
+ICON_COUNT: 8,
+TIME_LIMIT: 300,
+AD_COOLDOWN: 60,
+AD_DURATION: 5,
+AD_FOR_DOLL: 3,
+HINT_COST: 1,
+SHUFFLE_COST: 1,
+WIN_CHANCE: 1,
+WHEEL: [
+{ label: '谢谢参与', icon: '           ', weight: 30, type: 'none' },
+{ label: '抽奖机会 +1', icon: '            ', weight: 22, type: 'chance' },
+{ label: '小贴纸', icon: '         ', weight: 18, type: 'item' },
+{ label: '抽奖机会 +2', icon: '            ', weight: 10, type: 'chance2' },
+{ label: '钥匙扣', icon: '         ', weight: 9, type: 'item' },
+{ label: '毛绒娃娃', icon: '           ', weight: 4, type: 'doll' },
+{ label: '再来一次', icon: '           ', weight: 7, type: 'again' }
+]
+};
+
+const ICON_SET = ['       ','    ','   ','   ','   ','   ','   ','   ','   ','   ','   ','   '];
+
+/* ============================================================
+背景：Canvas 绘制卡通村庄（无外部图片）
+============================================================ */
+function drawBackground(){
+
+
+                                                               第5页/共9页
+const c = document.createElement('canvas');
+c.width = 900; c.height = 1600;
+const g = c.getContext('2d');
+
+const grad = g.createLinearGradient(0,0,0,1600);
+grad.addColorStop(0,'#8fd06a'); grad.addColorStop(.5,'#7cc457');
+grad.addColorStop(1,'#6ab34a');
+g.fillStyle = grad; g.fillRect(0,0,900,1600);
+
+for(let i=0;i<900;i++){
+g.fillStyle = 'rgba('+(90+Math.random()40|0)+','+(160+Math.random()50|
+0)+','+(70+Math.random()*40|0)+',.35)';
+g.beginPath();
+g.ellipse(Math.random()900, Math.random()1600, 6+Math.random()16, 3+Math.random()8,
+Math.random()*3, 0, 7);
+g.fill();
+}
+
+// 河流
+g.beginPath();
+g.moveTo(-40, 260);
+g.bezierCurveTo(200, 380, 120, 620, 380, 720);
+g.bezierCurveTo(640, 820, 560, 1080, 820, 1180);
+g.bezierCurveTo(960, 1230, 940, 1400, 960, 1600);
+g.lineTo(1000, 1600);
+g.bezierCurveTo(980, 1400, 1000, 1230, 860, 1180);
+g.bezierCurveTo(600, 1080, 680, 820, 420, 720);
+g.bezierCurveTo(160, 620, 240, 380, 0, 260);
+g.closePath();
+g.fillStyle = '#5fb8e8'; g.fill();
+g.strokeStyle = 'rgba(255,255,255,.55)'; g.lineWidth = 4; g.stroke();
+
+g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = 2;
+for(let i=0;i<14;i++){
+g.beginPath();
+const x = 120+Math.random()700, y = 300+Math.random()1100;
+g.moveTo(x,y); g.quadraticCurveTo(x+18,y-6,x+36,y);
+g.stroke();
+}
+
+
+
+                                                第6页/共9页
+// 小路
+g.beginPath();
+g.moveTo(450, 1600);
+g.bezierCurveTo(430, 1300, 520, 1000, 460, 760);
+g.bezierCurveTo(420, 600, 470, 420, 450, 0);
+g.lineWidth = 46; g.strokeStyle = '#d9c08a'; g.lineCap='round'; g.stroke();
+g.lineWidth = 38; g.strokeStyle = '#e8d3a3'; g.stroke();
+
+function house(x,y,s,rot){
+g.save(); g.translate(x,y); g.rotate(rot); g.scale(s,s);
+g.fillStyle = 'rgba(0,0,0,.15)';
+g.beginPath(); g.ellipse(0,52,52,16,0,0,7); g.fill();
+g.fillStyle = '#fdf3dd'; g.fillRect(-40,-10,80,60);
+g.strokeStyle = '#c9b48a'; g.lineWidth = 2; g.strokeRect(-40,-10,80,60);
+g.beginPath(); g.moveTo(-52,-10); g.lineTo(0,-58); g.lineTo(52,-10); g.closePath();
+g.fillStyle = '#c94f3d'; g.fill();
+g.strokeStyle = '#9c3628'; g.lineWidth = 2; g.stroke();
+g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1.5;
+for(let i=1;i<4;i++){ g.beginPath(); g.moveTo(-52+i13,-10-i12); g.lineTo(52-i13,-10-i12); g.stroke(); }
+g.fillStyle = '#8a5a2b'; g.fillRect(-10,18,20,32);
+g.fillStyle = '#ffd75e'; g.beginPath(); g.arc(5,34,2.4,0,7); g.fill();
+g.fillStyle = '#9fd8f5'; g.fillRect(-32,4,18,18); g.fillRect(14,4,18,18);
+g.strokeStyle = '#c9b48a'; g.lineWidth = 2; g.strokeRect(-32,4,18,18); g.strokeRect(14,4,18,18);
+g.restore();
+}
+house(150, 180, 1.05, -.06);
+house(700, 240, .95, .08);
+house(120, 560, .9, .05);
+house(760, 640, 1.0, -.05);
+house(180, 980, .95, -.04);
+house(720, 1020, 1.05, .06);
+house(300, 1420, .9, .03);
+house(640, 1440, .95, -.05);
+
+function tree(x,y,s){
+g.save(); g.translate(x,y); g.scale(s,s);
+g.fillStyle = 'rgba(0,0,0,.14)';
+g.beginPath(); g.ellipse(0,34,26,9,0,0,7); g.fill();
+
+
+                                                 第7页/共9页
+g.fillStyle = '#8a5a2b'; g.fillRect(-6,0,12,34);
+g.fillStyle = '#3f8f3a';
+g.beginPath(); g.arc(0,-14,30,0,7); g.fill();
+g.fillStyle = '#4fa845';
+g.beginPath(); g.arc(-14,-4,22,0,7); g.fill();
+g.beginPath(); g.arc(16,-6,20,0,7); g.fill();
+g.fillStyle = 'rgba(255,255,255,.18)';
+g.beginPath(); g.arc(-8,-22,12,0,7); g.fill();
+g.restore();
+}
+tree(60, 120, 1.1); tree(840, 120, 1.0); tree(60, 760, 1.0);
+tree(840, 860, 1.1); tree(70, 1240, 1.05); tree(830, 1320, 1.0);
+tree(250, 700, .85); tree(660, 780, .9);
+
+// 中央上方水池围栏场地
+g.save();
+g.fillStyle = 'rgba(255,255,255,.9)';
+g.strokeStyle = '#b08a4a'; g.lineWidth = 6;
+g.beginPath(); g.roundRect(300, 430, 300, 210, 18); g.fill(); g.stroke();
+g.fillStyle = '#6fc7ef';
+g.beginPath(); g.roundRect(318, 448, 264, 174, 12); g.fill();
+g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 3;
+for(let i=0;i<4;i++){
+g.beginPath(); g.moveTo(330, 480+i38); g.quadraticCurveTo(450, 470+i38, 570, 480+i*38);
+g.stroke();
+}
+// 浮岛小建筑
+g.fillStyle = '#fdf3dd'; g.fillRect(390, 500, 46, 34);
+g.fillStyle = '#c94f3d'; g.beginPath(); g.moveTo(384,500); g.lineTo(413,474); g.lineTo(442,500);
+g.closePath(); g.fill();
+g.fillStyle = '#fdf3dd'; g.fillRect(470, 540, 40, 30);
+g.fillStyle = '#c94f3d'; g.beginPath(); g.moveTo(464,540); g.lineTo(490,516); g.lineTo(516,540);
+g.closePath(); g.fill();
+g.fillStyle = '#ffd75e'; g.beginPath(); g.arc(360, 560, 8, 0, 7); g.fill();
+g.fillStyle = '#8fd06a'; g.beginPath(); g.arc(540, 500, 10, 0, 7); g.fill();
+g.restore();
+
+// 中央下方沙地广场
+
+
+
+                                                   第8页/共9页
+g.save();
+g.fillStyle = '#e8d3a3';
+g.strokeStyle = '#b08a4a'; g.lineWidth = 6;
+g.beginPath(); g.roundRect(300, 700, 300, 210, 18); g.fill(); g.stroke();
+g.fillStyle = '#dcc48f';
+g.beginPath(); g.roundRect(318, 718, 264, 174, 12); g.fill();
+// 祭坛
+g.fillStyle = '#c9b48a'; g.fillRect(400, 760
+
+
+
+
+                                               第9页/共9页
+
